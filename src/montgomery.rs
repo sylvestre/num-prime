@@ -246,22 +246,42 @@ fn pollard_rho(n: &BigUint) -> BigUint {
         }
 
         // The batch gcd caught every factor at once: replay it step by step.
-        loop {
-            mont.mulredc(&saved, &saved, &mut diff, &mut scratch);
-            core::mem::swap(&mut saved, &mut diff);
-            mont.addc(&mut saved, seed);
-            mont.sub(&tortoise, &saved, &mut diff);
-            let gcd = from_limbs(&diff).gcd(n);
-            if !gcd.is_one() {
-                if &gcd != n {
-                    return gcd;
-                }
-                // This polynomial cycles modulo every factor; try the next one.
-                break;
-            }
+        if let Some(gcd) = replay(&mont, n, &tortoise, &mut saved, seed) {
+            return gcd;
         }
+        // This polynomial cycles modulo every factor; try the next one.
     }
     unreachable!("Pollard's rho ran out of polynomials")
+}
+
+/// Replay a batch one step at a time, from `saved`, until the difference with
+/// `tortoise` shares a factor with `n`.
+///
+/// The batch gcd only says that some difference in the batch was divisible by
+/// a factor; this pins down which one. `None` means the polynomial cycles
+/// modulo every factor of `n` at once, so the batch cannot be split and the
+/// caller has to move on to the next one.
+fn replay(
+    mont: &Montgomery,
+    n: &BigUint,
+    tortoise: &[u64],
+    saved: &mut [u64],
+    seed: u64,
+) -> Option<BigUint> {
+    let len = mont.len();
+    let mut scratch = vec![0u64; len + 2];
+    let mut diff = vec![0u64; len];
+    loop {
+        mont.mulredc(saved, saved, &mut diff, &mut scratch);
+        saved.copy_from_slice(&diff);
+        mont.addc(saved, seed);
+
+        mont.sub(tortoise, saved, &mut diff);
+        let gcd = from_limbs(&diff).gcd(n);
+        if !gcd.is_one() {
+            return if &gcd == n { None } else { Some(gcd) };
+        }
+    }
 }
 
 /// If `x` is a perfect power, return its root and the exponent.
@@ -428,6 +448,51 @@ mod tests {
             check_divisor("9415652948736580809136742544524165509771941530102687611242"),
             BigUint::from(2u8)
         );
+    }
+
+    #[test]
+    fn geq_handles_the_carry_limb_and_equality() {
+        let n = parse("340282366920938463463374607431768211507");
+        let mont = Montgomery::new(&n);
+        let len = mont.len();
+        // A non-zero limb above the modulus dominates the comparison.
+        assert!(mont.geq(&to_limbs(&BigUint::one(), len), 1));
+        // x == n counts as >= n, and anything below it does not.
+        assert!(mont.geq(&to_limbs(&n, len), 0));
+        assert!(!mont.geq(&to_limbs(&(&n - BigUint::one()), len), 0));
+    }
+
+    /// One replay step, matching what [`replay`] does per iteration.
+    fn step(mont: &Montgomery, x: &[u64], seed: u64) -> Vec<u64> {
+        let len = mont.len();
+        let mut scratch = vec![0u64; len + 2];
+        let mut out = vec![0u64; len];
+        mont.mulredc(x, x, &mut out, &mut scratch);
+        mont.addc(&mut out, seed);
+        out
+    }
+
+    #[test]
+    fn replay_pins_down_the_factor_of_a_batch() {
+        // 34359738421 * 34359738451
+        let n = parse("1180591625390335725871");
+        let p = parse("34359738421");
+        let mont = Montgomery::new(&n);
+        let len = mont.len();
+        let start = to_limbs(&parse("12345678901234567890"), len);
+
+        // Point the tortoise one multiple of p away from where the next step
+        // lands: their difference is then divisible by p but not by n.
+        let next = from_limbs(&step(&mont, &start, 1));
+        let tortoise = to_limbs(&((&next + &p) % &n), len);
+        let mut saved = start.clone();
+        assert_eq!(replay(&mont, &n, &tortoise, &mut saved, 1), Some(p));
+
+        // A tortoise sitting exactly on that point makes the difference zero,
+        // i.e. the polynomial cycles modulo every factor at once.
+        let tortoise = to_limbs(&next, len);
+        let mut saved = start;
+        assert_eq!(replay(&mont, &n, &tortoise, &mut saved, 1), None);
     }
 
     #[test]

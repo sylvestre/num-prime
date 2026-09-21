@@ -612,6 +612,49 @@ mod tests {
         );
     }
 
+    /// [`PrimeBufferExt::divisor`] is public API, but [`PrimeBufferExt::factors`]
+    /// now reaches the specialized splitters first, so it needs its own test.
+    #[test]
+    fn divisor_returns_a_proper_factor() {
+        let buffer = NaiveBuffer::new();
+
+        // With the trial division limit at zero, the split comes down to
+        // Pollard's rho.
+        let mut config = FactorizationConfig {
+            td_limit: Some(0),
+            ..FactorizationConfig::default()
+        };
+        let target = 8_051u64; // 83 * 97
+        let d = buffer.divisor(&target, &mut config).unwrap();
+        assert!(d == 83 || d == 97, "unexpected divisor {}", d);
+
+        // A prime target has no divisor to find, and rho gives up once the
+        // configured trials are spent.
+        let mut config = FactorizationConfig {
+            td_limit: Some(0),
+            rho_trials: 4,
+            ..FactorizationConfig::default()
+        };
+        assert_eq!(buffer.divisor(&65_537u64, &mut config), None);
+        assert_eq!(config.rho_trials, 0);
+    }
+
+    /// The same, above `u64`, where `divisor` seeds rho from a wider range.
+    #[cfg(feature = "num-bigint")]
+    #[test]
+    fn divisor_returns_a_proper_factor_of_a_wide_target() {
+        // 4294967311 * 4294967357, just past `u64::MAX`
+        let target = BigUint::from(18_446_744_400_127_067_027u128);
+        let mut config = FactorizationConfig {
+            td_limit: Some(0),
+            rho_trials: 4,
+            ..FactorizationConfig::default()
+        };
+        let d = NaiveBuffer::new().divisor(&target, &mut config).unwrap();
+        assert!(&target % &d == BigUint::from(0u8), "{} is not a divisor", d);
+        assert!(d > BigUint::from(1u8) && d < target);
+    }
+
     #[test]
     fn prime_generation_test() {
         const PRIME50: [u64; 15] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];

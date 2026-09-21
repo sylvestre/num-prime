@@ -70,6 +70,8 @@ pub mod nt_funcs;
 
 mod integer;
 mod mint;
+#[cfg(feature = "big-int")]
+mod montgomery;
 mod primality;
 mod rand;
 mod tables;

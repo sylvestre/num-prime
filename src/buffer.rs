@@ -160,6 +160,8 @@ pub trait PrimeBufferExt: for<'a> PrimeBuffer<'a> {
                         .probably()
                     {
                         *result.entry(target).or_insert(0) += 1;
+                    } else if let Some(cofactors) = split_composite(&target) {
+                        todo.extend(cofactors);
                     } else if let Some(divisor) = {
                         // Give every cofactor its own budget: a shared one is
                         // exhausted by the first splits and every remaining
@@ -254,6 +256,55 @@ pub trait PrimeBufferExt: for<'a> PrimeBuffer<'a> {
 
         None
     }
+}
+
+/// Split a composite cofactor with the specialized paths.
+///
+/// Within `u128` that is [`factorize128`], which is far better tuned than the
+/// generic code. Beyond it the generic modular arithmetic reduces by division
+/// on every step, so [`crate::montgomery`] keeps the modulus in Montgomery
+/// form instead; it also peels off perfect powers, which Pollard's rho cannot
+/// split. Returns `None` when neither applies.
+fn split_composite<T: PrimalityBase>(target: &T) -> Option<Vec<T>>
+where
+    for<'r> &'r T: PrimalityRefBase<T>,
+{
+    if let Some(narrow) = target.to_u128() {
+        let mut factors = Vec::new();
+        for (factor, exp) in crate::nt_funcs::factorize128(narrow) {
+            factors.extend(core::iter::repeat(T::from_u128(factor).unwrap()).take(exp));
+        }
+        return Some(factors);
+    }
+    split_wide(target)
+}
+
+#[cfg(feature = "big-int")]
+fn split_wide<T: PrimalityBase>(target: &T) -> Option<Vec<T>>
+where
+    for<'r> &'r T: PrimalityRefBase<T>,
+{
+    use crate::montgomery::{divisor, from_biguint, to_biguint, Split};
+
+    let wide = to_biguint(target);
+    Some(match divisor(&wide) {
+        Split::Divisor(d) => {
+            let d: T = from_biguint(&d);
+            vec![target.clone() / d.clone(), d]
+        }
+        Split::Power(root, exp) => {
+            let root: T = from_biguint(&root);
+            vec![root; exp as usize]
+        }
+    })
+}
+
+#[cfg(not(feature = "big-int"))]
+fn split_wide<T: PrimalityBase>(_target: &T) -> Option<Vec<T>>
+where
+    for<'r> &'r T: PrimalityRefBase<T>,
+{
+    None
 }
 
 impl<T> PrimeBufferExt for T where for<'a> T: PrimeBuffer<'a> {}
@@ -528,6 +579,18 @@ mod tests {
                 factor
             );
         }
+    }
+
+    #[cfg(feature = "num-bigint")]
+    #[test]
+    fn factors_a_wide_prime_power() {
+        // 34359738421^7, which Pollard's rho on its own cannot split
+        let target = BigUint::from_str("34359738421").unwrap().pow(7u32);
+        let (factors, remainder): (BTreeMap<BigUint, usize>, _) =
+            NaiveBuffer::new().factors(target, None);
+        assert_eq!(remainder, None);
+        assert_eq!(factors.len(), 1);
+        assert_eq!(factors[&BigUint::from_str("34359738421").unwrap()], 7);
     }
 
     #[cfg(feature = "num-bigint")]

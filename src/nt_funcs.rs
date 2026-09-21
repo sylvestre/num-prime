@@ -509,10 +509,14 @@ pub(crate) fn factorize128_advanced(cofactors: &[(u128, usize)]) -> Vec<(u128, u
         let mut i = 0usize;
         let mut max_iter_ratio = 1;
 
+        // Hart's one-line and SQUFOF both cost O(target^(1/4)) per run, which
+        // only competes with Pollard's rho while the target is small. Above 64
+        // bits a single SQUFOF sweep already runs for billions of iterations,
+        // so keep doubling the rho budget instead of rotating into them.
+        let nmethods = if target.bits() <= 64 { 3 } else { 1 };
         let divisor = loop {
             // try various factorization method iteratively, sort by time per iteration
-            const NMETHODS: usize = 3;
-            match i % NMETHODS {
+            match i % nmethods {
                 0 => {
                     // Pollard's rho
                     let start = MontgomeryInt::new(random::<u128>(), &target);
@@ -556,7 +560,7 @@ pub(crate) fn factorize128_advanced(cofactors: &[(u128, usize)]) -> Vec<(u128, u
             i += 1;
 
             // increase max iterations after trying all methods
-            if i % NMETHODS == 0 {
+            if i % nmethods == 0 {
                 max_iter_ratio *= 2;
             }
         };
@@ -1348,6 +1352,22 @@ mod tests {
     use super::*;
     use rand::{prelude::SliceRandom, random};
     use std::iter::FromIterator;
+
+    /// 529341446939 * 529341447079 * 529341447139. SQUFOF and Hart's one-line
+    /// both cost O(n^(1/4)), so rotating into them on a 117-bit target used to
+    /// burn tens of seconds before Pollard's rho got another chance.
+    #[test]
+    fn factorize128_three_large_primes() {
+        let factors = factorize128(148_322_726_715_648_124_896_087_586_879_631_159);
+        assert_eq!(
+            factors,
+            BTreeMap::from_iter([
+                (529_341_446_939, 1),
+                (529_341_447_079, 1),
+                (529_341_447_139, 1)
+            ])
+        );
+    }
 
     #[test]
     fn is_prime64_test() {

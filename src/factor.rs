@@ -120,7 +120,9 @@ where
 
     while i < max_iter {
         i += 1;
-        a = a.sqm(target).addm(&offset, target);
+        // Not `a.sqm(target)`: for arbitrary-precision types that is a modular
+        // exponentiation, which costs far more than a single multiplication.
+        a = a.clone().mulm(&a, target).addm(&offset, target);
         if a == b {
             return (None, i);
         }

@@ -160,7 +160,13 @@ pub trait PrimeBufferExt: for<'a> PrimeBuffer<'a> {
                         .probably()
                     {
                         *result.entry(target).or_insert(0) += 1;
-                    } else if let Some(divisor) = self.divisor(&target, &mut config) {
+                    } else if let Some(divisor) = {
+                        // Give every cofactor its own budget: a shared one is
+                        // exhausted by the first splits and every remaining
+                        // composite is then reported as a failure.
+                        let mut config = config;
+                        self.divisor(&target, &mut config)
+                    } {
                         todo.push(divisor.clone());
                         todo.push(target / divisor);
                     } else {
@@ -496,6 +502,52 @@ mod tests {
     #[cfg(feature = "num-bigint")]
     use num_bigint::BigUint;
     use rand::random;
+
+    /// A 512-bit product of thirteen primes near 2^39. Every rho split used to
+    /// draw on one shared budget of four trials, so everything past the fourth
+    /// split came back as an unfactored remainder.
+    #[cfg(feature = "num-bigint")]
+    const THIRTEEN_PRIMES: &str = "256192672085272469290287843204387360975152374284235599731951768269391636066386517575760286247162035537155995319918598846421204855240141082924971355328149";
+
+    #[cfg(feature = "num-bigint")]
+    #[test]
+    fn factors_many_similar_primes_completely() {
+        let target = BigUint::from_str(THIRTEEN_PRIMES).unwrap();
+        let buffer = NaiveBuffer::new();
+        let (factors, remainder) = buffer.factors(target.clone(), None);
+        assert_eq!(remainder, None);
+        assert_eq!(factors.values().sum::<usize>(), 13);
+        let product = factors
+            .iter()
+            .fold(BigUint::from(1u8), |acc, (f, e)| acc * f.pow(*e as u32));
+        assert_eq!(product, target);
+        for factor in factors.keys() {
+            assert!(
+                buffer.is_prime(factor, None).probably(),
+                "{} is not prime",
+                factor
+            );
+        }
+    }
+
+    #[cfg(feature = "num-bigint")]
+    #[test]
+    fn factors_a_wide_number_with_small_factors() {
+        // 2^70 * 3^5 * 5 * 340282366920938463463374607431768211507
+        let target =
+            BigUint::from_str("488107430943668296195870985548628140589274519139277715139461120")
+                .unwrap();
+        let (factors, remainder): (BTreeMap<BigUint, usize>, _) =
+            NaiveBuffer::new().factors(target, None);
+        assert_eq!(remainder, None);
+        assert_eq!(factors[&BigUint::from(2u8)], 70);
+        assert_eq!(factors[&BigUint::from(3u8)], 5);
+        assert_eq!(factors[&BigUint::from(5u8)], 1);
+        assert_eq!(
+            factors[&BigUint::from_str("340282366920938463463374607431768211507").unwrap()],
+            1
+        );
+    }
 
     #[test]
     fn prime_generation_test() {

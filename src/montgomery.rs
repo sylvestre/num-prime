@@ -317,8 +317,14 @@ pub(crate) enum Split {
     Power(BigUint, u32),
 }
 
-/// Split the odd composite `n`, which must be larger than `u128::MAX`.
+/// Split the composite `n`, which must be larger than `u128::MAX`.
 pub(crate) fn divisor(n: &BigUint) -> Split {
+    if n.is_even() {
+        // Montgomery arithmetic needs an odd modulus. Callers normally strip
+        // small factors first, but `FactorizationConfig::td_limit` can be set
+        // low enough that they do not.
+        return Split::Divisor(BigUint::from(2u8));
+    }
     match perfect_power(n) {
         Some((root, exp)) => Split::Power(root, exp),
         None => Split::Divisor(pollard_rho(n)),
@@ -412,6 +418,16 @@ mod tests {
         let mut x = to_limbs(&a, len);
         mont.addc(&mut x, 5);
         assert_eq!(from_limbs(&x), (&a + &b) % &n);
+    }
+
+    #[test]
+    fn splits_an_even_number_without_montgomery() {
+        // 2 * 3 * five primes near 2^38. Montgomery arithmetic is undefined
+        // for an even modulus, so this must not reach it.
+        assert_eq!(
+            check_divisor("9415652948736580809136742544524165509771941530102687611242"),
+            BigUint::from(2u8)
+        );
     }
 
     #[test]

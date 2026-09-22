@@ -210,7 +210,10 @@ pub trait PrimeBufferExt: for<'a> PrimeBuffer<'a> {
     where
         for<'r> &'r T: PrimalityRefBase<T>,
     {
-        if matches!(config.td_limit, Some(0)) {
+        // A limit of zero disables trial division, which is what
+        // [`PrimeBufferExt::factors`] asks for: it has already divided out the
+        // small primes and only wants what rho can split off.
+        if !matches!(config.td_limit, Some(0)) {
             // try to get a factor by trial division
             let tsqrt: T = Roots::sqrt(target) + T::one();
             let limit = if let Some(l) = config.td_limit {
@@ -637,6 +640,22 @@ mod tests {
         };
         assert_eq!(buffer.divisor(&65_537u64, &mut config), None);
         assert_eq!(config.rho_trials, 0);
+    }
+
+    #[test]
+    fn divisor_finds_a_factor_by_trial_division() {
+        let buffer = NaiveBuffer::new();
+        let mut config = FactorizationConfig::default();
+
+        // 83 * 97, both in the small prime table, so trial division settles
+        // this without spending a rho trial.
+        assert_eq!(buffer.divisor(&8_051u64, &mut config), Some(83));
+        assert_eq!(config.rho_trials, FactorizationConfig::default().rho_trials);
+
+        // Running the table past the square root proves 97 prime, again
+        // without reaching rho.
+        assert_eq!(buffer.divisor(&97u64, &mut config), None);
+        assert_eq!(config.rho_trials, FactorizationConfig::default().rho_trials);
     }
 
     /// The same, above `u64`, where `divisor` seeds rho from a wider range.

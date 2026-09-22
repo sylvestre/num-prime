@@ -9,9 +9,6 @@ publish = false
 harness = false
 name = "bench"
 
-[dependencies]
-num-primes = { version = "0.3.0", optional = true }
-
 [dev-dependencies]
 criterion = { package = "codspeed-criterion-compat", version = "5.0.0" }
 glass_pumpkin = "1.2.0"
@@ -21,7 +18,3 @@ primal-check = "0.3.1"
 rand = "0.8.6"
 rand_chacha = "0.10"
 rand_core = "0.10"
-
-[features]
-default = []
-num-primes = ["dep:num-primes"]

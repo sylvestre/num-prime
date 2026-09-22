@@ -27,6 +27,7 @@ This crate provides utilities for prime number related functionalities:
   - Pollard's rho algorithm
   - Shanks's square forms factorization (SQUFOF)
   - Fast factorization of `u64` and `u128` integers
+  - Factorization beyond `u128`, with Pollard's rho over Montgomery arithmetic
 - Number theoretic functions
   - Prime Pi function (number of primes under limit), its estimation and its bounds
   - Nth prime, its estimation and its bounds

@@ -424,12 +424,21 @@ mod tests {
             SmallMint::from(341u16).test_sprp(2.into()),
             Either::Right(31.into())
         );
+    }
 
-        // one is not prime and must not pass the test
+    #[test]
+    fn sprp_rejects_one() {
+        // One is not prime, and the test used to answer that it is: with
+        // n - 1 == 0 the shift below runs off the end of the word.
         assert_eq!(1u16.test_sprp(2), Either::Left(false));
         assert!(!1u16.is_sprp(2));
+        assert!(!SmallMint::from(1u16).is_sprp(2.into()));
         #[cfg(feature = "num-bigint")]
         {
+            assert_eq!(
+                BigUint::from(1u8).test_sprp(BigUint::from(2u8)),
+                Either::Left(false)
+            );
             assert!(!BigUint::from(1u8).is_sprp(BigUint::from(2u8)));
         }
     }

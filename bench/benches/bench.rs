@@ -7,8 +7,6 @@ use glass_pumpkin::{prime as gprime, safe_prime as safe_gprime};
 use num_bigint::BigUint;
 use num_bigint::RandBigInt;
 use num_prime::{nt_funcs, RandPrime};
-#[cfg(feature = "num-primes")]
-use num_primes::{Generator, Verification};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -30,14 +28,6 @@ pub fn bench_is_prime(c: &mut Criterion) {
         b.iter(|| numbers().filter(|&n| nt_funcs::is_prime64(n)).count())
     });
 
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| {
-        b.iter(|| {
-            numbers()
-                .filter(|&n| Verification::is_prime(&n.into()))
-                .count()
-        })
-    });
     group.bench_function("glass_pumpkin", |b| {
         b.iter(|| numbers().filter(|&n| gprime::check(&n.into())).count())
     });
@@ -61,17 +51,6 @@ pub fn bench_is_prime(c: &mut Criterion) {
                 .count()
         })
     });
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| {
-        b.iter(|| {
-            numbers
-                .iter()
-                .filter(|&n| {
-                    Verification::is_prime(&num_primes::BigUint::from_bytes_le(&n.to_bytes_le()))
-                })
-                .count()
-        })
-    });
     group.bench_function("glass_pumpkin", |b| {
         b.iter(|| numbers.iter().filter(|&n| gprime::check(n)).count())
     });
@@ -86,19 +65,6 @@ pub fn bench_is_prime(c: &mut Criterion) {
             numbers
                 .iter()
                 .filter(|&n| nt_funcs::is_safe_prime(n).probably())
-                .count()
-        })
-    });
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| {
-        b.iter(|| {
-            numbers
-                .iter()
-                .filter(|&n| {
-                    Verification::is_safe_prime(&num_primes::BigUint::from_bytes_le(
-                        &n.to_bytes_le(),
-                    ))
-                })
                 .count()
         })
     });
@@ -129,17 +95,6 @@ pub fn bench_is_prime(c: &mut Criterion) {
                 .count()
         })
     });
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| {
-        b.iter(|| {
-            numbers
-                .iter()
-                .filter(|&n| {
-                    Verification::is_prime(&num_primes::BigUint::from_bytes_le(&n.to_bytes_le()))
-                })
-                .count()
-        })
-    });
     group.bench_function("glass_pumpkin", |b| {
         b.iter(|| numbers.iter().filter(|&n| gprime::check(n)).count())
     });
@@ -154,19 +109,6 @@ pub fn bench_is_prime(c: &mut Criterion) {
             numbers
                 .iter()
                 .filter(|&n| nt_funcs::is_safe_prime(n).probably())
-                .count()
-        })
-    });
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| {
-        b.iter(|| {
-            numbers
-                .iter()
-                .filter(|&n| {
-                    Verification::is_safe_prime(&num_primes::BigUint::from_bytes_le(
-                        &n.to_bytes_le(),
-                    ))
-                })
                 .count()
         })
     });
@@ -260,9 +202,6 @@ pub fn bench_prime_gen(c: &mut Criterion) {
     group.bench_function("num-prime (this crate)", |b| {
         b.iter(|| -> num_bigint::BigUint { rng.gen_prime(256, None) })
     });
-    // Note: num-primes uses thread_rng() internally, so this benchmark is not deterministic
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| b.iter(|| Generator::new_prime(256)));
     let mut rng_gp = ChaCha8Rng::seed_from_u64(257);
     group.bench_function("glass_pumpkin", |b| {
         b.iter(|| gprime::from_rng(256, &mut rng_gp))
@@ -276,9 +215,6 @@ pub fn bench_prime_gen(c: &mut Criterion) {
     group.bench_function("num-prime (this crate)", |b| {
         b.iter(|| -> num_bigint::BigUint { rng.gen_safe_prime(256) })
     });
-    // Note: num-primes uses thread_rng() internally, so this benchmark is not deterministic
-    #[cfg(feature = "num-primes")]
-    group.bench_function("num-primes", |b| b.iter(|| Generator::safe_prime(256)));
     let mut rng_gp = ChaCha8Rng::seed_from_u64(513);
     group.bench_function("glass_pumpkin", |b| {
         b.iter(|| safe_gprime::from_rng(256, &mut rng_gp))

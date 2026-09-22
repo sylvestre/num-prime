@@ -181,9 +181,11 @@ impl Montgomery {
 /// always split such an `n` eventually, so the only question is how long it
 /// takes.
 ///
-/// This follows GNU factor's `mp_factor_using_pollard_rho`: Brent's cycle
-/// detection with a single gcd over a batch of 128 accumulated differences,
-/// then a replay of that batch to pin down the factor.
+/// The algorithm is the standard one: Brent's cycle detection, a single gcd
+/// over a batch of 128 accumulated differences, then a replay of the batch to
+/// pin down the factor. It specializes
+/// [`pollard_rho`][crate::factor::pollard_rho] to Montgomery arithmetic; GNU
+/// factor arranges it the same way.
 fn pollard_rho(n: &BigUint) -> BigUint {
     let mont = Montgomery::new(n);
     let len = mont.len();
